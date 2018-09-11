@@ -1,0 +1,393 @@
+public class ViewWallpaper extends AppCompatActivity {
+
+    CollapsingToolbarLayout collapsingToolbarLayout;
+    FloatingActionButton floatingActionButton, fabDownload, fabCrop;
+    ImageView imageView;
+    CoordinatorLayout rootLayout;
+    String fileName, Id;
+    TextView text_name, text_description, text_id;
+
+    FloatingActionMenu mainFloating;
+    com.github.clans.fab.FloatingActionButton fbShare, moreshare;
+
+    //Room Database
+    CompositeDisposable compositeDisposable;
+    RecentRepository recentRepository;
+
+    //Facebook
+    CallbackManager callbackManager;
+    ShareDialog shareDialog;
+
+    private Target target = new Target() {
+        @Override
+        public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+            WallpaperManager wallpaperManager = WallpaperManager.getInstance(getApplicationContext());
+            try {
+                wallpaperManager.setBitmap(bitmap);
+                Snackbar.make(rootLayout, "Wallpaper was set", Snackbar.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void onBitmapFailed(Exception e, Drawable errorDrawable) {
+
+        }
+
+
+        @Override
+        public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+        }
+    };
+
+    private Target facebookConvertBitmap = new Target() {
+        @Override
+        public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+            SharePhoto sharePhoto = new SharePhoto.Builder()
+                    .setBitmap(bitmap)
+                    .build();
+            if (ShareDialog.canShow(SharePhotoContent.class)) {
+                SharePhotoContent content = new SharePhotoContent.Builder()
+                        .addPhoto(sharePhoto)
+                        .build();
+                shareDialog.show(content);
+            }
+        }
+
+        @Override
+        public void onBitmapFailed(Exception e, Drawable errorDrawable) {
+
+        }
+
+
+        @Override
+        public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+        }
+    };
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        switch (requestCode) {
+            case Common.PERMISSION_REQUEST_CODE: {
+                if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                    AlertDialog dialog = new SpotsDialog(ViewWallpaper.this);
+                    dialog.show();
+                    dialog.setMessage("Please wait......");
+
+                    String fileName = Common.select_background.getCategoryId() + "_"
+                            + Common.select_background.getImageLink().substring(Common.select_background.getImageLink()
+                            .lastIndexOf('/') + 1, Common.select_background.getImageLink()
+                            .lastIndexOf('.')) + ".png";
+                    Picasso.get()
+                            .load(Common.select_background.getImageLink())
+                            .into(new SaveImageHelper(getBaseContext(),
+                                    dialog,
+                                    getApplicationContext().getContentResolver(),
+                                    fileName,
+                                    "CreativeGraphy Live Wallpaper Image"));
+                } else
+                    Toast.makeText(this, " You need to accept this permission to download image", Toast.LENGTH_SHORT).show();
+
+            }
+            break;
+        }
+    }
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_view_wallpaper);
+
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+        if (getSupportActionBar() != null)
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+
+        //Init Facebook
+        callbackManager = CallbackManager.Factory.create();
+        shareDialog = new ShareDialog(this);
+
+        //Init RoomDatabase
+        compositeDisposable = new CompositeDisposable();
+        LocalDatabase database = LocalDatabase.getInstance(this);
+        recentRepository = RecentRepository.getInstance(RecentsDataSource.getInstance(database.recentsDAO()));
+
+        //Init
+        rootLayout = (CoordinatorLayout) findViewById(R.id.rootLayout);
+        collapsingToolbarLayout = (CollapsingToolbarLayout) findViewById(R.id.collapsing);
+        collapsingToolbarLayout.setCollapsedTitleTextAppearance(R.style.CollapsedAppBar);
+        collapsingToolbarLayout.setExpandedTitleTextAppearance(R.style.ExpandedAppBar);
+
+        collapsingToolbarLayout.setTitle(Common.CATEGORY_SELECTED);
+
+        imageView = (ImageView) findViewById(R.id.imageThumb);
+        Picasso.get()
+                .load(Common.select_background.getImageLink())
+                .into(imageView);
+
+        imageView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                Intent intent = new Intent(ViewWallpaper.this, PreviewWallpaper.class);
+                startActivity(intent);
+
+            }
+        });
+
+        text_id = (TextView) findViewById(R.id.image_id);
+        text_id.setText(Common.select_background_key);
+
+        text_name = (TextView) findViewById(R.id.image_name);
+        text_name.setText(Common.select_background.getImageName());
+
+        text_description = (TextView) findViewById(R.id.image_description);
+        text_description.setText(Common.select_background.getImageDescription());
+
+        mainFloating = (FloatingActionMenu) findViewById(R.id.menu);
+        fbShare = (com.github.clans.fab.FloatingActionButton) findViewById(R.id.fb_share);
+        fbShare.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+//Create callback
+                shareDialog.registerCallback(callbackManager, new FacebookCallback<Sharer.Result>() {
+                    @Override
+                    public void onSuccess(Sharer.Result result) {
+                        Toast.makeText(ViewWallpaper.this, "Share sucessfull", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onCancel() {
+                        Toast.makeText(ViewWallpaper.this, "Share cancelled", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onError(FacebookException error) {
+                        Toast.makeText(ViewWallpaper.this, "" + error.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+
+                //We will fetch photo from link and convert to bitmap
+                Picasso.get()
+                        .load(Common.select_background.getImageLink())
+                        .into(facebookConvertBitmap);
+            }
+        });
+        moreshare = (com.github.clans.fab.FloatingActionButton) findViewById(R.id.more_share);
+        moreshare.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareImage(Common.select_background.getImageLink(), ViewWallpaper.this);
+
+            }
+
+        });
+        //add to recents
+        addToRecents();
+
+        floatingActionButton = (FloatingActionButton) findViewById(R.id.fabWallpaper);
+        floatingActionButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Picasso.get()
+                        .load(Common.select_background.getImageLink())
+                        .into(target);
+            }
+        });
+
+        fabDownload = (FloatingActionButton) findViewById(R.id.fabDownload);
+        fabDownload.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                //check permission
+                if (ActivityCompat.checkSelfPermission(ViewWallpaper.this,
+                        android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, Common.PERMISSION_REQUEST_CODE);
+                } else {
+                    AlertDialog dialog = new SpotsDialog(ViewWallpaper.this);
+                    dialog.show();
+                    dialog.setMessage("Please wait......");
+                    if (!Common.select_background.getImageLink().contains("https://firebasestorage.googleapis.com"))
+                        fileName = Common.select_background.getCategoryId() + "_" + Common.CATEGORY_SELECTED + "_"
+                                + Common.select_background.getImageLink().substring(Common.select_background.getImageLink()
+                                .lastIndexOf('/') + 1, Common.select_background.getImageLink()
+                                .lastIndexOf('.')) + ".png";
+                    else if (Common.select_background.getImageLink().contains("https://firebasestorage.googleapis.com"))
+                        fileName = Common.select_background.getCategoryId() + "_" + Common.CATEGORY_SELECTED + "_"
+                                + Common.select_background.getImageLink().substring(Common.select_background.getImageLink()
+                                .lastIndexOf('=') + 1) + ".png";
+
+                    Picasso.get()
+                            .load(Common.select_background.getImageLink())
+                            .into(new SaveImageHelper(getBaseContext(),
+                                    dialog,
+                                    getApplicationContext().getContentResolver(),
+                                    fileName,
+                                    "CreativeGraphy - The Wallpaper App"));
+                }
+
+            }
+        });
+        fabCrop = (FloatingActionButton) findViewById(R.id.fabCrop);
+        fabCrop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                //crop action
+                Intent homeIntent = new Intent(ViewWallpaper.this, CropImages.class);
+                homeIntent.putExtra("Url", Common.select_background.getImageLink());
+                startActivity(homeIntent);
+            }
+        });
+        //View count
+        increaseViewCount();
+    }
+
+
+    public void shareImage(String imageLink, final Context context) {
+        Picasso.get().load(imageLink).into(new Target() {
+            @Override
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("*/*");
+                i.putExtra(Intent.EXTRA_TEXT, "this is sent by creative graphy");
+                i.putExtra(Intent.EXTRA_STREAM, getLocalBitmapUri(bitmap, context));
+                context.startActivity(Intent.createChooser(i, "Share Image"));
+            }
+
+            @Override
+            public void onBitmapFailed(Exception e, Drawable errorDrawable) {
+
+            }
+
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+            }
+        });
+    }
+
+    public Uri getLocalBitmapUri(Bitmap bmp, Context context) {
+        Uri bmpUri = null;
+        try {
+            File file = new File(context.getExternalFilesDir(Environment.DIRECTORY_PICTURES), "share_image_" + System.currentTimeMillis() + ".png");
+            FileOutputStream out = new FileOutputStream(file);
+            bmp.compress(Bitmap.CompressFormat.PNG, 90, out);
+            out.close();
+            bmpUri = Uri.fromFile(file);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return bmpUri;
+    }
+
+    private void increaseViewCount() {
+        FirebaseDatabase.getInstance()
+                .getReference(Common.STR_WALLPAPER)
+                .child(Common.select_background_key)
+                .addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot dataSnapshot) {
+                        if (dataSnapshot.hasChild("viewCount")) {
+                            WallpaperItem wallpaperItem = dataSnapshot.getValue(WallpaperItem.class);
+                            long count = wallpaperItem.getViewCount() + 1;
+                            //Update
+                            Map<String, Object> update_view = new HashMap<>();
+                            update_view.put("viewCount", count);
+
+                            FirebaseDatabase.getInstance()
+                                    .getReference(Common.STR_WALLPAPER)
+                                    .child(Common.select_background_key)
+                                    .updateChildren(update_view)
+                                    .addOnSuccessListener(new OnSuccessListener<Void>() {
+                                        @Override
+                                        public void onSuccess(Void aVoid) {
+
+                                        }
+                                    })
+                                    .addOnFailureListener(new OnFailureListener() {
+                                        @Override
+                                        public void onFailure(@NonNull Exception e) {
+                                            Toast.makeText(ViewWallpaper.this, "Cannot update view count", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+                        } else // if view count is not set (deafault 1)
+                        {
+                            Map<String, Object> update_view = new HashMap<>();
+                            update_view.put("viewCount", Long.valueOf(1));
+
+                            FirebaseDatabase.getInstance()
+                                    .getReference(Common.STR_WALLPAPER)
+                                    .child(Common.select_background_key)
+                                    .updateChildren(update_view)
+                                    .addOnSuccessListener(new OnSuccessListener<Void>() {
+                                        @Override
+                                        public void onSuccess(Void aVoid) {
+
+                                        }
+                                    })
+                                    .addOnFailureListener(new OnFailureListener() {
+                                        @Override
+                                        public void onFailure(@NonNull Exception e) {
+                                            Toast.makeText(ViewWallpaper.this, "Cannot set default view count", Toast.LENGTH_SHORT).show();
+                                        }
+                                    });
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(DatabaseError databaseError) {
+
+                    }
+                });
+    }
+
+    private void addToRecents() {
+        Disposable disposable = ObservableReplay.create(new ObservableOnSubscribe<Object>() {
+            @Override
+            public void subscribe(ObservableEmitter<Object> e) throws Exception {
+                Recents recents = new Recents(Common.select_background.getImageLink(),
+                        Common.select_background.getCategoryId(),
+                        String.valueOf(System.currentTimeMillis()),
+                        Common.select_background_key);
+                recentRepository.insertRecents(recents);
+                e.onComplete();
+            }
+        }).observeOn(AndroidSchedulers.mainThread())
+                .subscribeOn(Schedulers.io())
+                .subscribe(new Consumer<Object>() {
+                    @Override
+                    public void accept(Object o) throws Exception {
+
+                    }
+                }, new Consumer<Throwable>() {
+                    @Override
+                    public void accept(Throwable throwable) throws Exception {
+                        Log.e("ERROR", throwable.getMessage());
+                    }
+                }, new Action() {
+                    @Override
+                    public void run() throws Exception {
+
+                    }
+                });
+        compositeDisposable.add(disposable);
+    }
+
+    @Override
+    protected void onDestroy() {
+        Picasso.get().cancelRequest(target);
+        compositeDisposable.clear();
+        super.onDestroy();
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == android.R.id.home)
+            finish();//close activity when click back button
+        return super.onOptionsItemSelected(item);
+    }
+}
